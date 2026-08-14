@@ -234,30 +234,6 @@ The platform prioritizes simplicity, with intuitive and minimal steps required f
 
 ---
 
-## Key Design Decisions
-
-### Anti-Cheating Mechanism
-- **Top 3 Rule**: Ensures the most visible users (champions) are accountable, maintaining trust in the leaderboard.
-- **48-Hour Deadline**: Short enough to prevent delays, long enough for users to write a thoughtful explanation.
-- **Automatic Removal**: If no explanation is provided within 48 hours, the user is **automatically removed** from the leaderboard for that category.
-
-### Sandbagging Prevention
-- **Random Audits**: 5% of all users are randomly selected monthly to submit explanations, preventing users from intentionally staying at #4 to avoid the top 3 requirement.
-
-### Community Engagement
-- **Broadcasting**: Explanations from top 3 and audited users are shared with all participants to encourage learning and transparency.
-- **Verification**: Users can verify explanations they find legitimate, surfacing high-quality content.
-- **Flagging**: Users can report suspicious explanations or efficient solutions for moderation.
-
-### Privacy & Optional Data
-- **Optional Lifestyle/Wealth**: These fields are optional and do not affect leaderboard eligibility, avoiding privacy concerns.
-- **Anonymization**: Leaderboards default to showing scores without usernames, with opt-in visibility.
-
-### User Experience
-- **Simplicity**: Navigation and interactions are designed to be as simple and intuitive as possible, minimizing the steps required for all actions.
-
----
-
 ## Non-Functional Requirements
 - **Performance**: 
   - Leaderboard updates <500ms.
