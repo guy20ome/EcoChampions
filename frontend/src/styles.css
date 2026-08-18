@@ -1,0 +1,8 @@
+:root { font-family: system-ui, sans-serif; color: #222; }
+body { margin: 0; }
+label { display: block; margin: 8px 0; }
+input, select { padding: 6px; box-sizing: border-box; }
+a { text-decoration: none; color: #1666c1; }
+a.active { font-weight: 700; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #eee; padding: 6px 10px; text-align: left; }
