@@ -89,8 +89,9 @@ const authRoutes: FastifyPluginAsync = async (app) => {
   app.get('/me', { onRequest: [app.authenticate] }, async (req, reply) => {
     const userId = req.user.sub;
     const [rows] = await pool.execute<mysql.RowDataPacket[]>(
-      `SELECT u.id, u.email, u.username, u.opt_out_leaderboard, c.iso_code AS country_iso, c.name AS country_name,
-              ci.name AS city_name
+      `SELECT u.id, u.email, u.username, u.opt_out_leaderboard,
+              u.country_id, c.iso_code AS country_iso, c.name AS country_name,
+              u.city_id, ci.name AS city_name
          FROM users u
          LEFT JOIN countries c ON c.id = u.country_id
          LEFT JOIN cities ci ON ci.id = u.city_id

@@ -87,14 +87,48 @@ CREATE TABLE IF NOT EXISTS rankings (
   CONSTRAINT fk_rankings_indicator FOREIGN KEY (indicator_id) REFERENCES pollution_indicators(id)
 ) ENGINE=InnoDB;
 
--- Seed a small starter set of countries
+-- Seed a starter set of countries
 INSERT INTO countries (iso_code, name) VALUES
   ('FR', 'France'),
   ('US', 'United States'),
   ('GB', 'United Kingdom'),
   ('DE', 'Germany'),
-  ('IN', 'India')
+  ('IN', 'India'),
+  ('BR', 'Brazil'),
+  ('JP', 'Japan'),
+  ('AU', 'Australia'),
+  ('CA', 'Canada'),
+  ('ES', 'Spain'),
+  ('IT', 'Italy'),
+  ('MX', 'Mexico'),
+  ('ZA', 'South Africa'),
+  ('CN', 'China'),
+  ('SE', 'Sweden')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
+
+-- Seed starter cities (referenced by country ISO code, resolved at insert time).
+-- The NOT EXISTS guard makes this re-runnable against an already-populated cities table.
+INSERT INTO cities (country_id, name)
+SELECT c.id, v.name
+  FROM countries c
+  JOIN (
+    SELECT 'FR' AS iso, 'Paris' AS name UNION ALL SELECT 'FR', 'Lyon' UNION ALL SELECT 'FR', 'Marseille' UNION ALL SELECT 'FR', 'Toulouse' UNION ALL
+    SELECT 'US', 'New York' UNION ALL SELECT 'US', 'Los Angeles' UNION ALL SELECT 'US', 'Chicago' UNION ALL SELECT 'US', 'Seattle' UNION ALL
+    SELECT 'GB', 'London' UNION ALL SELECT 'GB', 'Manchester' UNION ALL SELECT 'GB', 'Bristol' UNION ALL
+    SELECT 'DE', 'Berlin' UNION ALL SELECT 'DE', 'Munich' UNION ALL SELECT 'DE', 'Hamburg' UNION ALL
+    SELECT 'IN', 'Mumbai' UNION ALL SELECT 'IN', 'Delhi' UNION ALL SELECT 'IN', 'Bengaluru' UNION ALL SELECT 'IN', 'Kolkata' UNION ALL
+    SELECT 'BR', 'Sao Paulo' UNION ALL SELECT 'BR', 'Rio de Janeiro' UNION ALL SELECT 'BR', 'Brasilia' UNION ALL
+    SELECT 'JP', 'Tokyo' UNION ALL SELECT 'JP', 'Osaka' UNION ALL SELECT 'JP', 'Kyoto' UNION ALL
+    SELECT 'AU', 'Sydney' UNION ALL SELECT 'AU', 'Melbourne' UNION ALL SELECT 'AU', 'Brisbane' UNION ALL
+    SELECT 'CA', 'Toronto' UNION ALL SELECT 'CA', 'Montreal' UNION ALL SELECT 'CA', 'Vancouver' UNION ALL
+    SELECT 'ES', 'Madrid' UNION ALL SELECT 'ES', 'Barcelona' UNION ALL SELECT 'ES', 'Seville' UNION ALL
+    SELECT 'IT', 'Rome' UNION ALL SELECT 'IT', 'Milan' UNION ALL SELECT 'IT', 'Naples' UNION ALL
+    SELECT 'MX', 'Mexico City' UNION ALL SELECT 'MX', 'Guadalajara' UNION ALL SELECT 'MX', 'Monterrey' UNION ALL
+    SELECT 'ZA', 'Johannesburg' UNION ALL SELECT 'ZA', 'Cape Town' UNION ALL SELECT 'ZA', 'Durban' UNION ALL
+    SELECT 'CN', 'Beijing' UNION ALL SELECT 'CN', 'Shanghai' UNION ALL SELECT 'CN', 'Guangzhou' UNION ALL
+    SELECT 'SE', 'Stockholm' UNION ALL SELECT 'SE', 'Gothenburg' UNION ALL SELECT 'SE', 'Malmo'
+  ) v ON v.iso = c.iso_code
+WHERE NOT EXISTS (SELECT 1 FROM cities WHERE country_id = c.id AND name = v.name);
 
 -- Seed Phase 1 pollution indicators
 INSERT INTO pollution_indicators (code, label, unit, lower_is_better) VALUES

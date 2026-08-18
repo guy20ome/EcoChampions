@@ -3,8 +3,10 @@ export interface User {
   email: string;
   username: string;
   opt_out_leaderboard: boolean;
+  country_id: number | null;
   country_iso: string | null;
   country_name: string | null;
+  city_id: number | null;
   city_name: string | null;
 }
 
