@@ -81,51 +81,72 @@ Evaluations:
     User surveys: Are explanations improving practices?
     Prioritization: Address gaps first (e.g., add weightings if regions are mismatched)
 
-V. Technical Stack (Local Development / Linux Box Deployment)
+V. Technical Stack (Scaling-First, Full-Stack TypeScript)
 
-Database:
+Design goal: keep the whole stack in the JS/TS ecosystem (full-stack friendly, matches the React frontend) while choosing components that scale from a single box to multi-node/cloud without a rewrite.
+
+Database (Primary store):
 
     MariaDB (already installed on your Linux box)
-        Use it instead of PostgreSQL for all data storage.
-        Schema will include: users, countries, cities, pollution_logs, categories, explanations, reports, moderation_actions
+        Use it instead of PostgreSQL for all durable relational data.
+        Schema will include: users, countries, cities, pollution_logs, categories, explanations, reports, moderation_actions, auth_tokens, rankings
         Example init command:
 
         mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS ecology_champions; use ecology_champions; CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE, username VARCHAR(100), country_id INT, city_id INT, opt_out_leaderboard BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
 
+Cache / Queue / Hot Data (Redis):
+
+    Redis (single biggest scaling lever for this app's access pattern)
+        Sorted sets for live leaderboard reads (avoids ORDER BY ... LIMIT on every request)
+        Rate limiting and short-lived session/refresh-token store
+        Queue backend for the 5% annual audit jobs and explanation-deadline notifications (BullMQ)
+        Optional cache layer in front of category-filtered leaderboard queries
+
 Backend:
 
-    Node.js with Express.js (lightweight HTTP API)
+    Node.js with Fastify (schema-first, JSON Schema validation, ~3x Express throughput, plugin system)
+        Use TypeScript across the backend (shared types with the frontend).
         Routes: /auth, /users, /pollution, /leaderboards, /explanations, /reports
-        Connect to MariaDB via the mysql2 npm package
-        Simple middleware for JWT‑based authentication (tokens stored in an auth_tokens table)
+        Connect to MariaDB via the mysql2/promise package (connection pooling).
+        Connect to Redis via the ioredis package.
+        Authentication: JWT (access tokens) with refresh tokens stored in MariaDB's auth_tokens table; Redis for token blacklist / rate limiting.
+        Leaderboard strategy: writes update a pre-materialized rankings table in MariaDB AND push into Redis sorted sets; reads are served from Redis with MariaDB as source of truth.
+        Background jobs (audits, deadline notifications) via BullMQ backed by Redis.
+        Note on Express: Express was considered and dropped because it lacks built-in schema validation and is ~3x slower than Fastify. If a heavier, more structured framework is later needed (DI, modules, OpenAPI), migrate Fastify to NestJS rather than back to Express.
 
 Frontend:
 
-    React with Vite (fast dev server) – runs locally on port 3000
-        Calls the backend API using fetch or axios
+    React with Vite (TypeScript) – SPA, runs locally on port 3000
+        Calls the backend API using a typed client (e.g., axios or fetch + zod for response validation)
         Components: Dashboard, Leaderboard, ExplanationFeed, FlagButton
+        Chosen as SPA (not Next.js SSR) because the app is auth-gated and has no public/indexable pages; revisit to Next.js/Remix only if public, SEO-indexed pages become a requirement.
 
-Hosting / Deployment:
+Hosting / Deployment (Containerized from day one):
 
-    Run everything on your Linux box (e.g., Ubuntu 22.04)
-        Use systemd services for the backend Node process and the React dev server (or deploy via a single npm start script that builds the React app and serves it with Express)
-        No cloud hosting needed – you control ports, TLS (via Let’s Encrypt or self‑signed), and firewall rules
-        Optionally put an Nginx reverse‑proxy in front to serve static assets and handle SSL termination
+    Docker Compose is the local AND production runtime (identical environments = easy future scale-out)
+        Services: db (MariaDB), redis, api (Fastify), frontend (Vite dev / nginx-served static build)
+        Run the compose stack on your Linux box (e.g., Ubuntu 22.04).
+        No cloud hosting needed – you control ports, TLS (via Let’s Encrypt or self‑signed), and firewall rules.
+        Optional Nginx reverse‑proxy in front of the api + frontend services for static assets and SSL termination.
+        Keeping containers from day one means local dev, the Linux box, and a future cloud deploy use the same images.
 
 Development Workflow:
 
     Clone the repo on your Linux box
-    Install Node.js (≥18) and npm
-    Create the MariaDB schema using the provided SQL files (schema/*.sql)
-    Run npm install to pull dependencies
-    npm run dev – starts both the Express API and the Vite dev server (concurrently)
+    Install Node.js (≥18), npm, Docker, and Docker Compose
+    Copy .env.example to .env and fill in DB/Redis credentials and JWT secrets
+    Create the MariaDB schema using the provided SQL files (schema/*.sql) – the db service applies them on first start
+    Run npm install in /api and /frontend, or docker compose build
+    npm run dev (or docker compose up) – starts db, redis, the Fastify API, and the Vite dev server together
     Access the app at http://<your‑linux‑box-ip>:3000 from any browser on the same network
 
-Future Scaling (when you’re ready to go beyond the box):
+Scaling Path (when you outgrow a single box):
 
-    Containerize the stack with Docker Compose (services: db, api, frontend)
-    Move the DB to a managed cloud instance if load increases
-    Add an Nginx load balancer and enable TLS for public access
+    The compose services are already independently deployable as container images.
+    Move the db to a managed MariaDB/cloud instance when write load increases.
+    Run multiple api replicas behind a load balancer (Redis-backed sessions make this safe).
+    Redis sorted sets already isolate hot leaderboard reads; add a Redis cluster if leaderboards dominate traffic.
+    Swap the single Nginx instance for a load balancer + TLS termination for public access.
 
 VI. Open Questions (To Be Addressed Early)
 
@@ -138,4 +159,3 @@ VII. Non‑Negotiables
     No user blocks until demonstrated misuse (flagging triggers investigation, not penalties)
     Data privacy: Countries/wealth fields must never be mandatory
     Leaderboard integrity: Data sorting must never be arbitrary or incentivized unfairly
-
