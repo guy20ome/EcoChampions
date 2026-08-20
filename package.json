@@ -1,0 +1,35 @@
+{
+  "name": "eco-champions",
+  "version": "1.0.0",
+  "description": "Ecology Champions - Collaborative sustainability tracking platform",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "setup-db": "mysql -u root -p ecology_champions < src/db/setup.sql",
+    "test": "jest"
+  },
+  "keywords": [
+    "environment",
+    "sustainability",
+    "leaderboard",
+    "gamification"
+  ],
+  "author": "Eco Champions Team",
+  "license": "MIT",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "joi": "^17.13.3",
+    "mysql2": "^3.11.2"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.4"
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true
+  }
+}
