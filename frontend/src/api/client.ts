@@ -7,22 +7,33 @@ function authHeaders(): HeadersInit {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  path: string;
+  constructor(status: number, message: string, path: string = '') {
     super(message);
     this.status = status;
+    this.path = path;
+    this.name = 'ApiError';
   }
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const url = `${BASE}${path}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(authHeaders() as Record<string, string>) };
-  const res = await fetch(`${BASE}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
-  if (res.status === 204) return undefined as T;
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    if (res.status === 401) localStorage.removeItem('access_token');
-    throw new ApiError(res.status, (data as { error?: string }).error ?? 'Request failed');
+  
+  try {
+    const res = await fetch(url, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
+    if (res.status === 204) return undefined as T;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      if (res.status === 401) localStorage.removeItem('access_token');
+      const errorMsg = (data as { error?: string }).error ?? `HTTP ${res.status}`;
+      throw new ApiError(res.status, `${errorMsg}${path ? ` on ${path}` : ''}`, path);
+    }
+    return data as T;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    throw new ApiError(0, `Network error: ${errorMsg}${path ? ` on ${path}` : ''} (URL: ${url})`, path);
   }
-  return data as T;
 }
 
 export const api = {

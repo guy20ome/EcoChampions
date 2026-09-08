@@ -6,7 +6,7 @@ import { pool } from '../db.js';
 const profileSchema = z.object({
   country_id: z.number().int().positive().nullable(),
   city_id: z.number().int().positive().nullable(),
-  opt_out_leaderboard: z.boolean(),
+  opt_out_leaderboard: z.boolean().or(z.number().int().transform(v => !!v)),
 });
 
 const userRoutes: FastifyPluginAsync = async (app) => {
