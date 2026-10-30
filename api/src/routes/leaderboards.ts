@@ -2,6 +2,7 @@ import mysql from 'mysql2/promise';
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db.js';
 import { redis, leaderboardKey } from '../redis.js';
+import { rebuildCombinedRankings } from './pollution.js';
 
 const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
   // GET /leaderboards?indicator_id=1&year=2026&month=1&country=FR&limit=50
@@ -79,6 +80,66 @@ const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
       .map((r, i) => ({ ...r, rank: i + 1 }));
 
     return reply.send({ leaderboard, indicator_id: indicatorId, year, month });
+  });
+
+  // GET /leaderboards/combined?year=2026&month=1&country=FR&limit=50
+  // Combined ranking based on sum of all 4 indicator values (ascending order).
+  // This is a temporary implementation - will be replaced with realistic formula later.
+  app.get('/combined', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const q = req.query as { year?: string; month?: string; country?: string; limit?: string };
+    const year = Number(q.year);
+    const month = Number(q.month);
+    const limit = Math.min(Number(q.limit) || 50, 200);
+    const countryIso = q.country;
+
+    if (!year || !month) {
+      return reply.code(400).send({ error: 'year and month are required' });
+    }
+
+    // Calculate combined rankings for all users
+    const results = await rebuildCombinedRankings(year, month);
+
+    if (results.length === 0) {
+      return reply.send({ leaderboard: [], year, month });
+    }
+
+    // Apply limit
+    const limitedResults = results.slice(0, limit);
+
+    // Hydrate user + location, optionally filtered by country.
+    const userIds = limitedResults.map(r => r.user_id);
+    const placeholders = userIds.map(() => '?').join(',');
+    const [userRows] = await pool.query<mysql.RowDataPacket[]>(
+      `SELECT u.id, u.username, u.opt_out_leaderboard, c.iso_code AS country_iso, c.name AS country_name, ci.name AS city_name
+         FROM users u
+         LEFT JOIN countries c ON c.id = u.country_id
+         LEFT JOIN cities ci ON ci.id = u.city_id
+        WHERE u.id IN (${placeholders})`,
+      userIds,
+    );
+
+    const byId = new Map(userRows.map((u) => [Number(u.id), u] as const));
+    const leaderboard = userIds
+      .map((uid) => {
+        const u = byId.get(uid);
+        if (!u || u.opt_out_leaderboard) return null;
+        if (countryIso && u.country_iso !== countryIso) return null;
+        const result = limitedResults.find(r => r.user_id === uid);
+        return {
+          rank: 0, // Will be re-numbered after filtering
+          user_id: uid,
+          username: u.username,
+          country_iso: u.country_iso,
+          country_name: u.country_name,
+          city_name: u.city_name,
+          combined_score: result?.combined_score ?? 0,
+        };
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null)
+      // Re-number ranks after filtering (e.g., opt-out / country filter).
+      .map((r, i) => ({ ...r, rank: i + 1 }));
+
+    return reply.send({ leaderboard, year, month });
   });
 };
 

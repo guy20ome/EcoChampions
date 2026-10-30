@@ -43,9 +43,10 @@ Current state: **Core concept defined** but no code exists yet. Implementation w
 1. Registration/login (email/password)  
 2. Profile setup (country [ISO 3166], city)  
 3. Monthly pollution logging (dropdown of indicators + value)  
-4. Global/regional leaderboards (ascending order)  
-5. Leaderboard opt-out toggle  
-**Technical needs**: Basic auth, logging, sorting  
+4. **Combined leaderboard**: Users are ranked by sum of all 4 pollution parameter values (users must have logged all 4 indicators to appear in the combined ranking)  
+5. Global/regional leaderboards (ascending order)  
+6. Leaderboard opt-out toggle  
+**Technical needs**: Basic auth, logging, sorting, combined ranking function  
 **Avoid**: Categories, explanations, or moderation  
 
 ---
@@ -100,6 +101,7 @@ Current state: **Core concept defined** but no code exists yet. Implementation w
   - Routes: `/auth`, `/users`, `/pollution`, `/leaderboards`, `/explanations`, `/reports`  
   - Connect to MariaDB via the `mysql2` npm package  
   - Simple middleware for JWT‑based authentication (tokens stored in an `auth_tokens` table)  
+  - Combined ranking: `calculateCombinedScore(userId, year, month)` in `api/src/routes/pollution.ts` sums all 4 indicator values (users must have logged all 4 to be ranked); `rebuildCombinedRankings(year, month)` computes rankings for all eligible users. Endpoint: `GET /leaderboards/combined?year=&month=&country=&limit=`  
 
 **Frontend**:  
 - **React** with **Vite** (fast dev server) – runs locally on port 3000  

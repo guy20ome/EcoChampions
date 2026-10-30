@@ -104,7 +104,7 @@ export async function rebuildRankings(
   const rankingRows: Array<[number, number, number]> = [];
   const zAddArgs: Array<[string, number]> = [];
   rows.forEach((row, i) => {
-    const userId = Number(row.id);
+    const userId = Number(row.user_id);
     const value = Number(row.value);
     const rank = i + 1;
     rankingRows.push([userId, rank, value]);
@@ -123,6 +123,61 @@ export async function rebuildRankings(
   // Redis sorted set: score = computed score, member = userId.
   const zAdd = zAddArgs.map(([member, score]) => ({ score, value: member }));
   if (zAdd.length) await redis.zadd(key, ...zAdd.flatMap((z) => [z.score, z.value]));
+}
+
+// Calculate combined ranking score for a user/period by summing the 4 indicator values.
+// For now this is a simple sum; will be replaced with a realistic weighted formula later.
+export async function calculateCombinedScore(
+  userId: number,
+  year: number,
+  month: number,
+): Promise<number | null> {
+  const [rows] = await pool.execute<mysql.RowDataPacket[]>(
+    `SELECT l.value, i.lower_is_better
+       FROM pollution_logs l
+       JOIN pollution_indicators i ON i.id = l.indicator_id
+      WHERE l.user_id = :uid AND l.log_year = :y AND l.log_month = :m`,
+    { uid: userId, y: year, m: month },
+  );
+
+  // Require all 4 indicator values before ranking a user.
+  if (rows.length !== 4) return null;
+
+  // Simple sum of all 4 indicator values (will be refined later).
+  // Note: waste_recycled_pct has lower_is_better = false (higher is better),
+  // but for the simple sum we just add raw values as requested.
+  return rows.reduce((sum, row) => sum + Number(row.value), 0);
+}
+
+// Recompute combined rankings for all users in a given period.
+// Returns an array of { user_id, combined_score } sorted ascending (best first).
+export async function rebuildCombinedRankings(
+  year: number,
+  month: number,
+): Promise<Array<{ user_id: number; combined_score: number }>> {
+  // Get all users who have at least one log entry for this period and are not opted out
+  const [userRows] = await pool.execute<mysql.RowDataPacket[]>(
+    `SELECT DISTINCT u.id AS user_id
+       FROM users u
+       JOIN pollution_logs l ON l.user_id = u.id
+      WHERE l.log_year = :y AND l.log_month = :m
+        AND u.opt_out_leaderboard = FALSE`,
+    { y: year, m: month },
+  );
+
+  const results: Array<{ user_id: number; combined_score: number }> = [];
+
+  for (const row of userRows) {
+    const userId = Number(row.user_id);
+    const score = await calculateCombinedScore(userId, year, month);
+    if (score !== null) {
+      results.push({ user_id: userId, combined_score: score });
+    }
+  }
+
+  // Sort ascending: lower combined score = better rank
+  results.sort((a, b) => a.combined_score - b.combined_score);
+  return results;
 }
 
 export default pollutionRoutes;

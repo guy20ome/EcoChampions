@@ -50,3 +50,13 @@ export interface LeaderboardEntry {
   country_name: string | null;
   city_name: string | null;
 }
+
+export interface CombinedLeaderboardEntry {
+  rank: number;
+  user_id: number;
+  username: string;
+  country_iso: string | null;
+  country_name: string | null;
+  city_name: string | null;
+  combined_score: number;
+}

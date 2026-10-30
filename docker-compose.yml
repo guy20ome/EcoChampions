@@ -41,7 +41,7 @@ services:
       MARIADB_HOST: db
       REDIS_HOST: redis
     ports:
-      - "4000:4000"
+      - "4001:4000"
 
   frontend:
     build:
@@ -52,4 +52,4 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "3001:80"
