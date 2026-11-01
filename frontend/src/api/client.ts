@@ -5,6 +5,47 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = new Promise(async (resolve, reject) => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) {
+        throw new Error('No refresh token');
+      }
+
+      const res = await fetch(`${BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('refresh_token', data.refresh_token);
+      resolve(data.access_token);
+    } catch (err) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      reject(err);
+    } finally {
+      refreshPromise = null;
+    }
+  });
+
+  return refreshPromise;
+}
+
 export class ApiError extends Error {
   status: number;
   path: string;
@@ -19,13 +60,33 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const url = `${BASE}${path}`;
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(authHeaders() as Record<string, string>) };
-  
+
   try {
     const res = await fetch(url, { ...init, headers: { ...headers, ...(init.headers as Record<string, string>) } });
     if (res.status === 204) return undefined as T;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      if (res.status === 401) localStorage.removeItem('access_token');
+      // Try to refresh token on 401
+      if (res.status === 401) {
+        try {
+          const newToken = await refreshAccessToken();
+          // Retry the request with the new token
+          const retryHeaders: Record<string, string> = { 'Content-Type': 'application/json', Authorization: `Bearer ${newToken}` };
+          const retryRes = await fetch(url, { ...init, headers: { ...retryHeaders, ...(init.headers as Record<string, string>) } });
+          if (retryRes.status === 204) return undefined as T;
+          const retryData = await retryRes.json().catch(() => ({}));
+          if (!retryRes.ok) {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            const errorMsg = (retryData as { error?: string }).error ?? `HTTP ${retryRes.status}`;
+            throw new ApiError(retryRes.status, `${errorMsg}${path ? ` on ${path}` : ''}`, path);
+          }
+          return retryData as T;
+        } catch {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
+        }
+      }
       const errorMsg = (data as { error?: string }).error ?? `HTTP ${res.status}`;
       throw new ApiError(res.status, `${errorMsg}${path ? ` on ${path}` : ''}`, path);
     }

@@ -13,3 +13,8 @@ export const redis = new IORedis({
 export function leaderboardKey(indicatorId: number, year: number, month: number): string {
   return `lb:${indicatorId}:${year}-${String(month).padStart(2, '0')}`;
 }
+
+// Combined leaderboard sorted-set key for a given period.
+export function combinedLeaderboardKey(year: number, month: number): string {
+  return `lb:combined:${year}-${String(month).padStart(2, '0')}`;
+}

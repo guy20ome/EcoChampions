@@ -47,7 +47,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: ${VITE_API_URL}
+        VITE_API_URL: /api
     restart: unless-stopped
     depends_on:
       - api

@@ -2,7 +2,7 @@ import mysql from 'mysql2/promise';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { pool } from '../db.js';
-import { redis, leaderboardKey } from '../redis.js';
+import { redis, leaderboardKey, combinedLeaderboardKey } from '../redis.js';
 
 const logSchema = z.object({
   indicator_id: z.number().int().positive(),
@@ -40,6 +40,9 @@ const pollutionRoutes: FastifyPluginAsync = async (app) => {
 
     // Rebuild this period's rankings in MariaDB, then mirror to Redis.
     await rebuildRankings(indicator_id, log_year, log_month, Boolean(indicator.lower_is_better));
+
+    // Also rebuild combined rankings for this period and cache in Redis.
+    await rebuildAndCacheCombinedRankings(log_year, log_month);
 
     return reply.code(201).send({ ok: true });
   });
@@ -178,6 +181,23 @@ export async function rebuildCombinedRankings(
   // Sort ascending: lower combined score = better rank
   results.sort((a, b) => a.combined_score - b.combined_score);
   return results;
+}
+
+// Rebuild combined rankings and cache in Redis sorted set.
+export async function rebuildAndCacheCombinedRankings(
+  year: number,
+  month: number,
+): Promise<void> {
+  const results = await rebuildCombinedRankings(year, month);
+
+  const key = combinedLeaderboardKey(year, month);
+  await redis.del(key);
+
+  if (results.length === 0) return;
+
+  // Store in Redis sorted set with combined_score as the score
+  const zAdd = results.map((r) => ({ score: r.combined_score, value: String(r.user_id) }));
+  await redis.zadd(key, ...zAdd.flatMap((z) => [z.score, z.value]));
 }
 
 export default pollutionRoutes;

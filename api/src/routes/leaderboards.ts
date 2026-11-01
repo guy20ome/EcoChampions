@@ -1,8 +1,8 @@
 import mysql from 'mysql2/promise';
 import type { FastifyPluginAsync } from 'fastify';
 import { pool } from '../db.js';
-import { redis, leaderboardKey } from '../redis.js';
-import { rebuildCombinedRankings } from './pollution.js';
+import { redis, leaderboardKey, combinedLeaderboardKey } from '../redis.js';
+import { rebuildCombinedRankings, rebuildAndCacheCombinedRankings } from './pollution.js';
 
 const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
   // GET /leaderboards?indicator_id=1&year=2026&month=1&country=FR&limit=50
@@ -84,7 +84,7 @@ const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /leaderboards/combined?year=2026&month=1&country=FR&limit=50
   // Combined ranking based on sum of all 4 indicator values (ascending order).
-  // This is a temporary implementation - will be replaced with realistic formula later.
+  // Uses cached Redis sorted set; falls back to rebuilding if not cached.
   app.get('/combined', { onRequest: [app.authenticate] }, async (req, reply) => {
     const q = req.query as { year?: string; month?: string; country?: string; limit?: string };
     const year = Number(q.year);
@@ -96,8 +96,24 @@ const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'year and month are required' });
     }
 
-    // Calculate combined rankings for all users
-    const results = await rebuildCombinedRankings(year, month);
+    let results: Array<{ user_id: number; combined_score: number }> = [];
+    const key = combinedLeaderboardKey(year, month);
+    const cachedExists = await redis.exists(key);
+
+    if (cachedExists) {
+      // Read from Redis sorted set (ascending by score)
+      const entries = await redis.zrange(key, 0, -1, 'WITHSCORES');
+      for (let i = 0; i < entries.length; i += 2) {
+        results.push({
+          user_id: Number(entries[i]),
+          combined_score: Number(entries[i + 1])
+        });
+      }
+    } else {
+      // Fallback: rebuild and cache
+      results = await rebuildCombinedRankings(year, month);
+      await rebuildAndCacheCombinedRankings(year, month);
+    }
 
     if (results.length === 0) {
       return reply.send({ leaderboard: [], year, month });
