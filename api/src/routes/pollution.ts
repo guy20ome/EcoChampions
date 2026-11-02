@@ -12,6 +12,16 @@ const logSchema = z.object({
   note: z.string().max(255).optional(),
 });
 
+const bulkLogSchema = z.object({
+  log_year: z.number().int().min(2000).max(2100),
+  log_month: z.number().int().min(1).max(12),
+  entries: z.array(z.object({
+    indicator_id: z.number().int().positive(),
+    value: z.number(),
+    note: z.string().max(255).optional(),
+  })),
+});
+
 const pollutionRoutes: FastifyPluginAsync = async (app) => {
   // Upsert a monthly pollution log (one value per indicator/month)
   app.post('/', { onRequest: [app.authenticate] }, async (req, reply) => {
@@ -45,6 +55,62 @@ const pollutionRoutes: FastifyPluginAsync = async (app) => {
     await rebuildAndCacheCombinedRankings(log_year, log_month);
 
     return reply.code(201).send({ ok: true });
+  });
+
+  // Bulk upsert multiple monthly pollution logs for a single period
+  app.post('/bulk', { onRequest: [app.authenticate] }, async (req, reply) => {
+    const parsed = bulkLogSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Invalid input', details: parsed.error.flatten() });
+    }
+    const { log_year, log_month, entries } = parsed.data;
+    const userId = req.user.sub;
+
+    // Validate all indicator IDs exist
+    const [indicatorRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT id, lower_is_better FROM pollution_indicators WHERE id IN (:ids)',
+      { ids: entries.map((e) => e.indicator_id) },
+    );
+    const validIndicatorIds = new Set(indicatorRows.map((r) => Number(r.id)));
+    const indicatorMap = new Map<number, boolean>();
+    for (const row of indicatorRows) {
+      indicatorMap.set(Number(row.id), Boolean(row.lower_is_better));
+    }
+
+    // Check for invalid indicators
+    const invalidEntries = entries.filter((e) => !validIndicatorIds.has(e.indicator_id));
+    if (invalidEntries.length > 0) {
+      return reply.code(400).send({ error: 'Unknown indicator(s)' });
+    }
+
+    // Build the insert query with ON DUPLICATE KEY UPDATE
+    const placeholders = entries.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+    const flat = entries.flatMap((e) => [
+      userId,
+      e.indicator_id,
+      log_year,
+      log_month,
+      e.value,
+      e.note ?? null,
+    ]);
+
+    await pool.query(
+      `INSERT INTO pollution_logs (user_id, indicator_id, log_year, log_month, value, note)
+       VALUES ${placeholders}
+       ON DUPLICATE KEY UPDATE value = VALUES(value), note = VALUES(note)`,
+      flat,
+    );
+
+    // Rebuild rankings for each indicator
+    for (const entry of entries) {
+      const lowerIsBetter = indicatorMap.get(entry.indicator_id) ?? true;
+      await rebuildRankings(entry.indicator_id, log_year, log_month, lowerIsBetter);
+    }
+
+    // Rebuild combined rankings for this period
+    await rebuildAndCacheCombinedRankings(log_year, log_month);
+
+    return reply.code(201).send({ ok: true, count: entries.length });
   });
 
   // List the current user's logs (optionally filtered by year/month)
