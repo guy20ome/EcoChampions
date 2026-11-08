@@ -111,8 +111,7 @@ const leaderboardsRoutes: FastifyPluginAsync = async (app) => {
       }
     } else {
       // Fallback: rebuild and cache
-      results = await rebuildCombinedRankings(year, month);
-      await rebuildAndCacheCombinedRankings(year, month);
+      results = await rebuildAndCacheCombinedRankings(year, month);
     }
 
     if (results.length === 0) {

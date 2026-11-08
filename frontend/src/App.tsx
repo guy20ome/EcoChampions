@@ -5,6 +5,7 @@ import { Dashboard } from './views/Dashboard';
 import { LogPollution } from './views/LogPollution';
 import { Leaderboard } from './views/Leaderboard';
 import { Settings } from './views/Settings';
+import { DashboardWall } from './views/DashboardWall';
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ function Nav() {
     <nav style={{ display: 'flex', gap: 12, padding: 12, borderBottom: '1px solid #eee' }}>
       <NavLink to="/dashboard">Dashboard</NavLink>
       <NavLink to="/log">Log pollution</NavLink>
+      <NavLink to="/wall">Event Wall</NavLink>
       <NavLink to="/leaderboard">Leaderboard</NavLink>
       <NavLink to="/settings">Settings</NavLink>
       <button onClick={logout} style={{ marginLeft: 'auto' }}>Sign out</button>
@@ -34,6 +36,7 @@ export function App() {
             <Route path="/log" element={<LogPollution />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/wall" element={<DashboardWall />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>
         ) : (

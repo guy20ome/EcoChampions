@@ -1,161 +1,161 @@
-Repository Status
+# Ecology Champions Specification
 
-The Ecology Champions platform (formerly 2026 Environmental Impact Tracker) is a collaborative and gamified system where users:
+Collaborative, gamified sustainability tracking platform where users track monthly pollution data, compete on leaderboards, share event explanations, and discuss strategies on a community dashboard wall.
 
-    Track sustainability efforts (e.g., CO₂, plastic use)
-    Compete in category-based leaderboards (country, location, lifestyle, wealth)
-    Share actionable strategies for top performers
-    Evaluate community-submitted explanations for authenticity
-    Maintain transparency through public explanations and moderation
+---
 
-Current state: Core concept defined but no code exists yet. Implementation will evolve based on user needs and deployment constraints.
-I. Core Philosophy
+## 1. Core Philosophy
 
-Progressive enhancement: Start with the simplest viable product (MVP) and add complexity only when needed.
+**Progressive enhancement**: Start with the simplest viable product (MVP) and add complexity only when needed.
+- Prioritize a stable core before introducing gamification or moderation features.
+- Use user feedback to drive implementation direction.
 
-    Prioritize a stable core before introducing gamification or moderation features.
-    Use user feedback to drive implementation direction.
+**User-Centric Design**:
+- Minimal steps: Submit data → View leaderboards → Engage with explanations
+- No invented barriers: Users shouldn’t face obstacles unrelated to core goals (e.g., accreditation-first systems)
+- Public explanations: Visible, editable justifications for top performers
 
-II. User-Centric Design
+**Anti-Cheating Principles**: Address cheating only when evidence emerges (e.g., sandbagging patterns) via:
+- 5% random audits (triggered annually, not monthly)
+- Community flagging for manual verification
+- No automatic penalties until verified misconduct
 
-Navigation & Experience:
+**Non-Negotiables**:
+- No user blocks until demonstrated misuse (flagging triggers investigation, not penalties)
+- Data privacy: Countries/wealth fields must never be mandatory
+- Leaderboard integrity: Data sorting must never be arbitrary or incentivized unfairly
 
-    Minimal steps: Submit data → View leaderboards → Engage with explanations
-    No invented barriers: Users shouldn’t face obstacles unrelated to core goals (e.g., accreditation-first systems)
-    Public explanations: Encourage learning through visible, editable justifications for top performers
+---
 
-III. Anti-Cheating Principles
+## 2. Implemented Features
 
-Address cheating only when evidence emerges (e.g., sandbagging patterns) via:
+### Phase 1 — MVP (Complete)
+1. Registration/login (email/password) — JWT access tokens + refresh tokens stored in MariaDB
+2. Profile setup (country [ISO 3166], city) — optional, never mandatory
+3. Monthly pollution logging — single mode (one indicator) or grid mode (all 4 indicators at once)
+4. Combined leaderboard — ranked by sum of all 4 indicator values (ascending); users must log all 4 to appear
+5. Individual indicator leaderboards — ascending order (best first)
+6. Global/regional leaderboards (filter by country ISO)
+7. Leaderboard opt-out toggle
 
-    5% random audits (triggered annually, not monthly)
-    Community flagging for manual verification
-    No automatic penalties until verified misconduct
+### Phase 2 — Event Explanations & Discussion Wall (Complete)
+1. **Auto-triggered event explanations**: When a user submits their first monthly report or has a significant increase/decrease (≥25% change vs previous month) in an indicator, the system creates a draft event explanation
+2. **Dashboard wall** (`/wall`): Feed of all published explanations with color-coded event badges
+3. **Pending status**: Users see a reminder when they have logged data but haven't posted an explanation for the current period
+4. **Manual explanation posting**: Users can post explanations anytime via the wall form
+5. **Threaded comments/discussion**: Users can comment on explanations and reply to comments (replies are threaded)
+6. **Event type badges**: Color-coded badges (green = first report, red = significant increase, blue = significant decrease)
 
-IV. Development Roadmap (Problem-Driven, Not Predefined)
-Phase 1: MVP (Weeks 1–4)
+---
 
-Goal: Users can track and compare their sustainability data
-Features:
+## 3. Technical Stack
 
-    Registration/login (email/password)
-    Profile setup (country [ISO 3166], city)
-    Monthly pollution logging (dropdown of indicators + value)
-    Global/regional leaderboards (ascending order)
-    Leaderboard opt-out toggle
-    Technical needs: Basic auth, logging, sorting
-    Avoid: Categories, explanations, or moderation
+| Layer | Technology |
+|-------|------------|
+| Database | MariaDB 11 |
+| Cache / Queue | Redis 7 |
+| Backend | Node.js + Fastify (TypeScript) |
+| Auth | JWT access tokens + refresh tokens in MariaDB |
+| Frontend | React + Vite (TypeScript) |
+| Runtime | Docker Compose (db, redis, api, frontend) |
 
-Phase 2: Categories & Feeds (Weeks 5–8)
+### Backend Routes
 
-Goal: Enable context-aware competition and strategy sharing
-Features:
+| Route | Description |
+|-------|-------------|
+| `POST /auth/register` | Register a new user |
+| `POST /auth/login` | Log in, returns access + refresh tokens |
+| `POST /auth/refresh` | Refresh access token |
+| `GET /auth/me` | Current user profile |
+| `GET /users/me` | Get current user |
+| `PATCH /users/me` | Update profile (country, city, opt-out) |
+| `GET /users/countries` | List ISO 3166 countries |
+| `GET /users/cities?country_id=` | List cities for a country |
+| `GET /users/indicators` | List pollution indicators |
+| `POST /pollution` | Upsert a single pollution log |
+| `POST /pollution/bulk` | Bulk upsert multiple logs for one period |
+| `GET /pollution?year=&month=` | List current user's logs |
+| `GET /leaderboards?indicator_id=&year=&month=&country=&limit=` | Individual indicator leaderboard |
+| `GET /leaderboards/combined?year=&month=&country=&limit=` | Combined leaderboard |
+| `POST /explanations` | Create an event explanation |
+| `GET /explanations` | List published explanations (filter by user, event_code, year, month) |
+| `GET /explanations/types` | List event types |
+| `GET /explanations/pending` | Check pending explanation status |
+| `GET /explanations/:id/comments` | List comments for an explanation |
+| `POST /explanations/:id/comments` | Add a comment or reply |
 
-    Users self-identify categories (country, lifestyle cluster)
-    Category-specific leaderboards (default view)
-    Top 3 strategy feed: Visible explanations from leaders (editable)
-    Simple flagging button on explanations
-    Technical needs: Filtering, feeds, admin controls
-    Avoid: Mandatory explainations or audits
+### Database Schema Files
 
-Phase 3: Explanations & Moderation (Weeks 9–12)
+| File | Contents |
+|------|----------|
+| `schema/001_init.sql` | Phase 1: users, countries, cities, pollution_indicators, pollution_logs, rankings, auth_tokens |
+| `schema/002_explanations.sql` | Phase 2: explanation_events, event_explanations, explanation_comments, dashboard_wall view |
 
-Goal: Deepen community trust and accountability
-Features:
+---
 
-    Mandatory explanations only for top 3 (48‑hour deadline per leaderboard)
-    Public explanation visibility/profile integration
-    Community review: Users vote/flag explanations for quality
-    Moderation dashboard for flagged content
-    Audit tool for admin oversight
-    Technical needs: Deadlines, notifications, broadcast system
-    Key Insight: Enforcement should reward transparency, not punish users
+## 4. Deployment
 
-Phase 4: Scaling & Feedback (Ongoing)
+### Docker Compose (recommended)
+```bash
+cp .env.example .env    # edit JWT_*, MARIADB_* secrets
+docker compose up --build
+# Frontend: http://localhost:3000   API: http://localhost:4000
+```
 
-Goal: Iterate based on real-world usage
-Evaluations:
+### Schema
+The MariaDB container applies `schema/001_init.sql` automatically on first start. `schema/002_explanations.sql` must be applied manually if the database already existed:
 
-    Weekly compliance rates: Do top 3 users provide explanations?
-    Flag tracking: Are reports surfacing real issues?
-    User surveys: Are explanations improving practices?
-    Prioritization: Address gaps first (e.g., add weightings if regions are mismatched)
+```bash
+docker exec ecochampions-db-1 mysql -uroot -p$MARIADB_ROOT_PASSWORD ecology_champions < schema/002_explanations.sql
+```
 
-V. Technical Stack (Scaling-First, Full-Stack TypeScript)
+---
 
-Design goal: keep the whole stack in the JS/TS ecosystem (full-stack friendly, matches the React frontend) while choosing components that scale from a single box to multi-node/cloud without a rewrite.
+## 5. Local Development
 
-Database (Primary store):
+```bash
+npm install                  # installs workspaces (api, frontend)
+npm run dev                  # runs API (:4000) + Vite (:3000) concurrently
+```
 
-    MariaDB (already installed on your Linux box)
-        Use it instead of PostgreSQL for all durable relational data.
-        Schema will include: users, countries, cities, pollution_logs, categories, explanations, reports, moderation_actions, auth_tokens, rankings
-        Example init command:
+Requires reachable MariaDB and Redis. Point `.env` at them:
+```bash
+MARIADB_HOST=localhost REDIS_HOST=localhost
+npm install
+mysql -u root -p < schema/001_init.sql
+mysql -u root -p < schema/002_explanations.sql
+npm run dev
+```
 
-        mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS ecology_champions; use ecology_champions; CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, email VARCHAR(255) NOT NULL UNIQUE, username VARCHAR(100), country_id INT, city_id INT, opt_out_leaderboard BOOLEAN DEFAULT FALSE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);"
+Access at `http://localhost:3000` (Vite proxy forwards `/api` to `http://localhost:4000`).
 
-Cache / Queue / Hot Data (Redis):
+---
 
-    Redis (single biggest scaling lever for this app's access pattern)
-        Sorted sets for live leaderboard reads (avoids ORDER BY ... LIMIT on every request)
-        Rate limiting and short-lived session/refresh-token store
-        Queue backend for the 5% annual audit jobs and explanation-deadline notifications (BullMQ)
-        Optional cache layer in front of category-filtered leaderboard queries
+## 6. Project Layout
 
-Backend:
+```
+api/           Fastify + TypeScript backend
+  src/
+    config.ts, db.ts, redis.ts
+    auth/        password hashing, JWT plugin, refresh tokens
+    routes/      auth, users, pollution, leaderboards, explanations
+    services/    explanationEvents.ts (event detection logic)
+frontend/      React + Vite (TypeScript)
+  src/
+    api/         typed API client + types
+    auth/        AuthProvider context
+    components/  ExplanationComments.tsx
+    views/       AuthPage, Dashboard, LogPollution, Leaderboard, Settings, DashboardWall
+schema/        MariaDB init SQL (001_init.sql, 002_explanations.sql)
+docker-compose.yml
+.env.example
+CLAUDE.md
+eco-champions-spec.md
+README.md
+```
 
-    Node.js with Fastify (schema-first, JSON Schema validation, ~3x Express throughput, plugin system)
-        Use TypeScript across the backend (shared types with the frontend).
-        Routes: /auth, /users, /pollution, /leaderboards, /explanations, /reports
-        Connect to MariaDB via the mysql2/promise package (connection pooling).
-        Connect to Redis via the ioredis package.
-        Authentication: JWT (access tokens) with refresh tokens stored in MariaDB's auth_tokens table; Redis for token blacklist / rate limiting.
-        Leaderboard strategy: writes update a pre-materialized rankings table in MariaDB AND push into Redis sorted sets; reads are served from Redis with MariaDB as source of truth.
-        Background jobs (audits, deadline notifications) via BullMQ backed by Redis.
-        Note on Express: Express was considered and dropped because it lacks built-in schema validation and is ~3x slower than Fastify. If a heavier, more structured framework is later needed (DI, modules, OpenAPI), migrate Fastify to NestJS rather than back to Express.
+---
 
-Frontend:
+## 7. Notes on Duplicate Documentation
 
-    React with Vite (TypeScript) – SPA, runs locally on port 3000
-        Calls the backend API using a typed client (e.g., axios or fetch + zod for response validation)
-        Components: Dashboard, Leaderboard, ExplanationFeed, FlagButton
-        Chosen as SPA (not Next.js SSR) because the app is auth-gated and has no public/indexable pages; revisit to Next.js/Remix only if public, SEO-indexed pages become a requirement.
-
-Hosting / Deployment (Containerized from day one):
-
-    Docker Compose is the local AND production runtime (identical environments = easy future scale-out)
-        Services: db (MariaDB), redis, api (Fastify), frontend (Vite dev / nginx-served static build)
-        Run the compose stack on your Linux box (e.g., Ubuntu 22.04).
-        No cloud hosting needed – you control ports, TLS (via Let’s Encrypt or self‑signed), and firewall rules.
-        Optional Nginx reverse‑proxy in front of the api + frontend services for static assets and SSL termination.
-        Keeping containers from day one means local dev, the Linux box, and a future cloud deploy use the same images.
-
-Development Workflow:
-
-    Clone the repo on your Linux box
-    Install Node.js (≥18), npm, Docker, and Docker Compose
-    Copy .env.example to .env and fill in DB/Redis credentials and JWT secrets
-    Create the MariaDB schema using the provided SQL files (schema/*.sql) – the db service applies them on first start
-    Run npm install in /api and /frontend, or docker compose build
-    npm run dev (or docker compose up) – starts db, redis, the Fastify API, and the Vite dev server together
-    Access the app at http://<your‑linux‑box-ip>:3000 from any browser on the same network
-
-Scaling Path (when you outgrow a single box):
-
-    The compose services are already independently deployable as container images.
-    Move the db to a managed MariaDB/cloud instance when write load increases.
-    Run multiple api replicas behind a load balancer (Redis-backed sessions make this safe).
-    Redis sorted sets already isolate hot leaderboard reads; add a Redis cluster if leaderboards dominate traffic.
-    Swap the single Nginx instance for a load balancer + TLS termination for public access.
-
-VI. Open Questions (To Be Addressed Early)
-
-    Audit thresholds: Should 5 % be adjusted based on user growth?
-    Explanation visibility: Should users opt‑in/out of sharing top‑3 explanations publicly?
-    Weighting logic: Should country‑level weightings correlate with baseline pollution metrics?
-
-VII. Non‑Negotiables
-
-    No user blocks until demonstrated misuse (flagging triggers investigation, not penalties)
-    Data privacy: Countries/wealth fields must never be mandatory
-    Leaderboard integrity: Data sorting must never be arbitrary or incentivized unfairly
+`CLAUDE.md` and `eco-champions-spec.md` overlap heavily. `CLAUDE.md` is the project instruction file checked into the repo for Claude Code; `eco-champions-spec.md` is the human-readable specification. Both should stay in sync; when in doubt, `eco-champions-spec.md` reflects the current state of implementation.

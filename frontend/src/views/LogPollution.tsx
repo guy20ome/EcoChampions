@@ -33,6 +33,32 @@ export function LogPollution() {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Paginated history state (10 per page)
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyData, setHistoryData] = useState<{
+    periods: Array<{ year: number; month: number; logs: PollutionLog[] }>;
+    page: number;
+    limit: number;
+    totalPages: number;
+    totalPeriods: number;
+  } | null>(null);
+
+  const loadHistory = async () => {
+    const res = await api.get<{
+      periods: Array<{ year: number; month: number; logs: PollutionLog[] }>;
+      page: number;
+      limit: number;
+      totalPages: number;
+      totalPeriods: number;
+    }>(`/pollution/history?page=${historyPage}&limit=10`);
+    setHistoryData(res);
+  };
+
+  useEffect(() => {
+    void loadHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyPage]);
+
   const load = async () => {
     const ind = await api.get<{ indicators: Indicator[] }>('/users/indicators');
     setIndicators(ind.indicators);
@@ -436,8 +462,81 @@ export function LogPollution() {
       {mode === 'single' ? renderSingleMode() : renderGridMode()}
 
       <h2>Your logs for {mode === 'single' ? year : gridYear}-{String(mode === 'single' ? month : gridMonth).padStart(2, '0')}</h2>
+
+      {/* Paginated history (10 per page) */}
+      <div style={{ marginTop: 24, overflowX: 'auto' }}>
+        <h3>Historical Summary (by year/month)</h3>
+        {historyData && historyData.periods.length === 0 ? (
+          <p style={{ color: '#666' }}>No historical data yet.</p>
+        ) : historyData ? (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f0f0f0' }}>
+                <th style={{ border: '1px solid #ddd', padding: 6, textAlign: 'left' }}>Year</th>
+                <th style={{ border: '1px solid #ddd', padding: 6, textAlign: 'left' }}>Month</th>
+                {indicators.map((i) => (
+                  <th key={i.id} style={{ border: '1px solid #ddd', padding: 6, textAlign: 'left' }}>
+                    {i.label}
+                    <div style={{ fontSize: 10, color: '#666', fontWeight: 'normal' }}>{i.unit}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {historyData.periods.map((period) => (
+                <tr key={`${period.year}-${period.month}`}>
+                  <td style={{ border: '1px solid #ddd', padding: 6, fontWeight: 600 }}>{period.year}</td>
+                  <td style={{ border: '1px solid #ddd', padding: 6 }}>{String(period.month).padStart(2, '0')}</td>
+                  {indicators.map((i) => {
+                    const log = period.logs.find((l) => l.indicator_id === i.id);
+                    return (
+                      <td key={i.id} style={{ border: '1px solid #ddd', padding: 6, verticalAlign: 'top' }}>
+                        {log ? (
+                          <div>
+                            <div><strong>{log.value}</strong></div>
+                            {log.note && <div style={{ fontSize: 11, color: '#666' }}>{log.note}</div>}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#bbb' }}>—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p style={{ color: '#666' }}>Loading history…</p>
+        )}
+
+        {/* Pagination controls */}
+        {historyData && historyData.totalPeriods > 10 && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>
+            <button
+              onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+              disabled={historyPage <= 1}
+              style={{ padding: '6px 12px', cursor: 'pointer', opacity: historyPage <= 1 ? 0.5 : 1 }}
+            >
+              ← Previous
+            </button>
+            <span style={{ fontSize: 13, color: '#666' }}>
+              Page {historyPage} of {historyData.totalPages} ({historyData.totalPeriods} periods)
+            </span>
+            <button
+              onClick={() => setHistoryPage((p) => Math.min(historyData.totalPages, p + 1))}
+              disabled={historyPage >= historyData.totalPages}
+              style={{ padding: '6px 12px', cursor: 'pointer', opacity: historyPage >= historyData.totalPages ? 0.5 : 1 }}
+            >
+              Next →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Current period logs */}
       {logs.length === 0 ? <p>No logs for this period.</p> : (
-        <table style={{ width: '100%' }}>
+        <table style={{ width: '100%', marginTop: 16 }}>
           <thead><tr><th>Indicator</th><th>Value</th><th>Note</th></tr></thead>
           <tbody>
             {logs.map((l) => <tr key={l.id}><td>{l.label} ({l.unit})</td><td>{l.value}</td><td>{l.note ?? ''}</td></tr>)}

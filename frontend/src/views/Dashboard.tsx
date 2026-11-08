@@ -9,6 +9,7 @@ export function Dashboard() {
       <p>Welcome back, <strong>{user?.username}</strong>!</p>
       <ul>
         <li><NavLink to="/log">Log pollution</NavLink></li>
+        <li><NavLink to="/wall">Event wall & discussion</NavLink></li>
         <li><NavLink to="/leaderboard">Leaderboard</NavLink></li>
         <li><NavLink to="/settings">Settings</NavLink></li>
       </ul>

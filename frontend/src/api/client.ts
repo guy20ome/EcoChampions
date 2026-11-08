@@ -1,3 +1,5 @@
+import type { EventExplanation, ExplanationComment, PendingExplanation, ExplanationEvent } from './types';
+
 const BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '');
 
 function authHeaders(): HeadersInit {
@@ -101,4 +103,41 @@ export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, body?: unknown) => request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  postExplanation: (content: string, event_type_id: number, indicator_id?: number, log_year?: number, log_month?: number) =>
+    request<void>('/explanations', {
+      method: 'POST',
+      body: JSON.stringify({ content, event_type_id, indicator_id, log_year, log_month }),
+    }),
+  explanations: {
+    get: (params?: {
+      user_id?: number;
+      event_code?: string;
+      year?: number;
+      month?: number;
+      limit?: number;
+      offset?: number;
+    }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.user_id) searchParams.append('user_id', String(params.user_id));
+      if (params?.event_code) searchParams.append('event_code', params.event_code);
+      if (params?.year) searchParams.append('year', String(params.year));
+      if (params?.month) searchParams.append('month', String(params.month));
+      if (params?.limit) searchParams.append('limit', String(params.limit));
+      if (params?.offset) searchParams.append('offset', String(params.offset));
+      return request<{ explanations: EventExplanation[] }>(`/explanations?${searchParams}`);
+    },
+    getComments: (explanationId: number) => request<{ comments: ExplanationComment[] }>(`/explanations/${explanationId}/comments`),
+    addComment: (explanationId: number, content: string, parentCommentId?: number) =>
+      request<void>(`/explanations/${explanationId}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content, parent_comment_id: parentCommentId }),
+      }),
+    hasPending: (params?: { year?: number; month?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.year) searchParams.append('year', String(params.year));
+      if (params?.month) searchParams.append('month', String(params.month));
+      return request<PendingExplanation>(`/explanations/pending?${searchParams}`);
+    },
+    getTypes: () => request<{ event_types: ExplanationEvent[] }>('/explanations/types'),
+  },
 };
