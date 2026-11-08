@@ -4,6 +4,7 @@ import { AuthPage } from './views/AuthPage';
 import { Dashboard } from './views/Dashboard';
 import { LogPollution } from './views/LogPollution';
 import { Leaderboard } from './views/Leaderboard';
+import { Settings } from './views/Settings';
 
 function Nav() {
   const { user, logout } = useAuth();
@@ -13,6 +14,7 @@ function Nav() {
       <NavLink to="/dashboard">Dashboard</NavLink>
       <NavLink to="/log">Log pollution</NavLink>
       <NavLink to="/leaderboard">Leaderboard</NavLink>
+      <NavLink to="/settings">Settings</NavLink>
       <button onClick={logout} style={{ marginLeft: 'auto' }}>Sign out</button>
     </nav>
   );
@@ -31,6 +33,7 @@ export function App() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/log" element={<LogPollution />} />
             <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </>
         ) : (
