@@ -36,21 +36,21 @@ See [`eco-champions-spec.md`](./eco-champions-spec.md) for full design details, 
 ```bash
 cp .env.example .env           # edit JWT_*, MARIADB_* secrets
 docker compose up --build
-# Frontend: http://localhost:3000   API: http://localhost:4000
+# Frontend: http://localhost:3001   API: http://localhost:4001
 ```
 
-The MariaDB container applies `schema/001_init.sql` automatically on first start. If the database already exists, apply Phase 2 schema manually:
+On a new database volume, MariaDB applies both SQL files from `schema/` automatically. If you have an existing database volume that was initialized before `schema/002_explanations.sql` was added, apply that file once:
 ```bash
-docker exec ecochampions-db-1 mysql -uroot -p$MARIADB_ROOT_PASSWORD ecology_champions < schema/002_explanations.sql
+docker compose exec -T db sh -c 'mariadb -uroot -p"$MARIADB_ROOT_PASSWORD" ecology_champions' < schema/002_explanations.sql
 ```
 
 ## Local dev
 ```bash
 npm install                  # installs workspaces (api, frontend)
 npm run dev                  # runs API (:4000) + Vite (:3000) concurrently
-mysql -u root -p < schema/001_init.sql
-docker exec ecochampions-db-1 mysql -uroot -p$MARIADB_ROOT_PASSWORD ecology_champions < schema/002_explanations.sql
 ```
+
+For a local MariaDB instance, apply `schema/001_init.sql` and then `schema/002_explanations.sql`. A new database volume created by Docker Compose applies both automatically.
 
 Access at `http://localhost:3000`. The Vite dev server proxies `/api` → `http://localhost:4000`.
 
@@ -60,6 +60,7 @@ Access at `http://localhost:3000`. The Vite dev server proxies `/api` → `http:
 | `npm run dev` | Start API + frontend concurrently |
 | `npm run build` | Build both packages |
 | `npm run typecheck` | Typecheck both packages |
+| `npm test` | Run API domain-rule tests |
 
 ## Project layout
 ```
@@ -68,7 +69,8 @@ api/            Fastify + TypeScript backend
     config.ts, db.ts, redis.ts
     auth/       password hashing, JWT plugin, refresh tokens
     routes/     auth, users, pollution, leaderboards, explanations
-    services/   explanationEvents.ts (event detection)
+    services/   explanationEvents.ts, domainRules.ts
+  test/         Core domain-rule tests
 frontend/       React + Vite (TypeScript)
   src/
     api/        typed client + types

@@ -1,5 +1,4 @@
 import { NavLink } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext';
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { EventExplanation, Indicator, PollutionLog } from '../api/types';
@@ -12,7 +11,6 @@ interface HistoryPeriod {
 }
 
 export function Dashboard() {
-  const { user } = useAuth();
   const [indicators, setIndicators] = useState<Indicator[]>([]);
   const [historyData, setHistoryData] = useState<HistoryPeriod[]>([]);
   const [explanations, setExplanations] = useState<EventExplanation[]>([]);
@@ -150,64 +148,6 @@ export function Dashboard() {
 
   return (
     <div style={{ maxWidth: 1200, margin: '2rem auto' }}>
-      <h1>Dashboard</h1>
-      <p>Welcome back, <strong>{user?.username}</strong>!</p>
-
-      {/* Quick Navigation */}
-      <div style={{ marginTop: 24, marginBottom: 32 }}>
-        <h2 style={{ fontSize: 18, marginBottom: 12 }}>Quick Actions</h2>
-        <ul style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', listStyle: 'none', padding: 0 }}>
-          <li>
-            <NavLink
-              to="/log"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                background: '#3182ce',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: 4,
-                fontWeight: 500
-              }}
-            >
-              Log Pollution
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="/wall"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                background: '#48bb78',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: 4,
-                fontWeight: 500
-              }}
-            >
-              Event Wall
-            </NavLink>
-          </li>
-          <li>
-            <NavLink
-              to="/leaderboard"
-              style={{
-                display: 'inline-block',
-                padding: '8px 16px',
-                background: '#805ad5',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: 4,
-                fontWeight: 500
-              }}
-            >
-              Leaderboard
-            </NavLink>
-          </li>
-        </ul>
-      </div>
-
       {/* Trends Chart and Community Wall - Two Column Layout */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: 40, color: '#666' }}>

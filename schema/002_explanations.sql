@@ -67,8 +67,8 @@ SELECT
   e.id AS explanation_id,
   e.user_id,
   u.username,
-  u.country_iso,
-  u.city_name,
+  c.iso_code AS country_iso,
+  ci.name AS city_name,
   e.event_type_id,
   ev.code AS event_code,
   ev.label AS event_label,
@@ -83,6 +83,8 @@ SELECT
   COUNT(c.id) AS comment_count
 FROM event_explanations e
 JOIN users u ON u.id = e.user_id
+LEFT JOIN countries c ON c.id = u.country_id
+LEFT JOIN cities ci ON ci.id = u.city_id
 JOIN explanation_events ev ON ev.id = e.event_type_id
 LEFT JOIN pollution_indicators pi ON pi.id = e.indicator_id
 LEFT JOIN explanation_comments c ON c.explanation_id = e.id AND c.parent_comment_id IS NULL

@@ -1,9 +1,8 @@
 import mysql from 'mysql2/promise';
 import { pool } from '../db.js';
+import { getSignificantChangeEvent, SIGNIFICANT_CHANGE_PCT } from './domainRules.js';
 
-// Threshold (as a percentage) that triggers a "significant change" explanation request.
-// A change is significant if abs(new - old) / old * 100 >= SIGNIFICANT_CHANGE_PCT.
-export const SIGNIFICANT_CHANGE_PCT = 25;
+export { SIGNIFICANT_CHANGE_PCT };
 
 // Returns the previous period's value for a given user/indicator, if any.
 export async function getPreviousPeriodValue(
@@ -78,31 +77,10 @@ export async function detectExplanationEvent(
   const curValue = Number(curRows[0].value);
   const oldValue = prev.prevValue;
 
-  if (oldValue <= 0) {
-    // Can't compute a meaningful percentage change from zero/negative baseline.
-    return { required: false, event_code: null };
-  }
-
-  const pctChange = ((curValue - oldValue) / oldValue) * 100;
-  const absPct = Math.abs(pctChange);
-
-  if (absPct < SIGNIFICANT_CHANGE_PCT) {
-    return { required: false, event_code: null };
-  }
-
-  // For lower-is-better indicators: increase is bad (significant_increase), decrease is good.
-  // For higher-is-better indicators: increase is good, decrease is bad.
-  // We flag both directions as "significant_change" events; the event type code tells the UI
-  // whether it was an increase or decrease relative to the indicator's direction.
-  if (pctChange > 0) {
-    return lowerIsBetter
-      ? { required: true, event_code: 'significant_increase' }
-      : { required: true, event_code: 'significant_decrease' };
-  } else {
-    return lowerIsBetter
-      ? { required: true, event_code: 'significant_decrease' }
-      : { required: true, event_code: 'significant_increase' };
-  }
+  const eventCode = getSignificantChangeEvent(curValue, oldValue, lowerIsBetter);
+  return eventCode
+    ? { required: true, event_code: eventCode }
+    : { required: false, event_code: null };
 }
 
 // Returns the explanation_event id for a given code, inserting the type if missing.

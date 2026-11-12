@@ -12,7 +12,8 @@
     "dev:api": "npm -w api run dev",
     "dev:web": "npm -w frontend run dev",
     "build": "npm -w api run build && npm -w frontend run build",
-    "typecheck": "npm -w api run typecheck && npm -w frontend run typecheck"
+    "typecheck": "npm -w api run typecheck && npm -w frontend run typecheck",
+    "test": "npm -w api test"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

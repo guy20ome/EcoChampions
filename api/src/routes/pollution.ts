@@ -4,6 +4,11 @@ import { z } from 'zod';
 import { pool } from '../db.js';
 import { redis, leaderboardKey, combinedLeaderboardKey } from '../redis.js';
 import { detectExplanationEvent, getOrCreateEventTypeId } from '../services/explanationEvents.js';
+import {
+  calculateCombinedScoreFromLogs,
+  REQUIRED_COMBINED_INDICATORS,
+  shouldCreateFirstReport,
+} from '../services/domainRules.js';
 
 const logSchema = z.object({
   indicator_id: z.number().int().positive(),
@@ -20,7 +25,10 @@ const bulkLogSchema = z.object({
     indicator_id: z.number().int().positive(),
     value: z.number(),
     note: z.string().max(255).optional(),
-  })),
+  })).min(1).refine(
+    (entries) => new Set(entries.map((entry) => entry.indicator_id)).size === entries.length,
+    { message: 'Each indicator may only be submitted once' },
+  ),
 });
 
 const pollutionRoutes: FastifyPluginAsync = async (app) => {
@@ -113,6 +121,12 @@ const pollutionRoutes: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: 'Unknown indicator(s)' });
     }
 
+    const [existingLogRows] = await pool.execute<mysql.RowDataPacket[]>(
+      'SELECT COUNT(*) AS total FROM pollution_logs WHERE user_id = :uid',
+      { uid: userId },
+    );
+    const existingLogCount = Number(existingLogRows[0].total);
+
     // Build the insert query with ON DUPLICATE KEY UPDATE
     const placeholders = entries.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
     const flat = entries.flatMap((e) => [
@@ -131,17 +145,6 @@ const pollutionRoutes: FastifyPluginAsync = async (app) => {
       flat,
     );
 
-    // Check for first_report BEFORE inserting - we need to know if this is the user's
-    // first log ever for this period. Since we already inserted, we check how many
-    // entries were newly created (not updates). If all entries were new and user had
-    // no prior logs for this period, the first one triggers first_report.
-    const [periodRows] = await pool.execute<mysql.RowDataPacket[]>(
-      `SELECT COUNT(*) AS total FROM pollution_logs WHERE user_id = :uid AND log_year = :y AND log_month = :m`,
-      { uid: userId, y: log_year, m: log_month },
-    );
-    const logsAfterInsert = Number(periodRows[0].total);
-    const hadLogsBefore = logsAfterInsert > entries.length;
-
     // Detect event explanations for each indicator
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
@@ -149,14 +152,11 @@ const pollutionRoutes: FastifyPluginAsync = async (app) => {
       await rebuildRankings(entry.indicator_id, log_year, log_month, lowerIsBetter);
 
       // Also detect event explanations for each entry
-      // For first_report: only trigger on the first entry if user had no logs for this period before
       try {
-        let { required, event_code } = await detectExplanationEvent(userId, entry.indicator_id, log_year, log_month);
-
-        // Special handling for first_report: only fire on the first NEW entry if user had no prior logs
-        if (event_code === 'first_report') {
-          required = !hadLogsBefore && i === 0;
-        }
+        const detection = shouldCreateFirstReport(existingLogCount, i)
+          ? { required: true, event_code: 'first_report' }
+          : await detectExplanationEvent(userId, entry.indicator_id, log_year, log_month);
+        const { required, event_code } = detection;
 
         if (required && event_code) {
           const eventTypeId = await getOrCreateEventTypeId(event_code);
@@ -344,19 +344,10 @@ export async function calculateCombinedScore(
   );
 
   // Require all 4 indicator values before ranking a user.
-  if (rows.length !== 4) return null;
-
-  // Sum with direction awareness:
-  // - lower_is_better: add raw value (lower is better)
-  // - higher_is_better (lower_is_better=false): add inverted value so higher raw = lower score
-  return rows.reduce((sum, row) => {
-    const val = Number(row.value);
-    if (Boolean(row.lower_is_better)) {
-      return sum + val;
-    }
-    // Higher_is_better: value >= 0, so invert
-    return sum + (200 - val);
-  }, 0);
+  return calculateCombinedScoreFromLogs(rows.map((row) => ({
+    value: Number(row.value),
+    lowerIsBetter: Boolean(row.lower_is_better),
+  })));
 }
 
 // Recompute combined rankings for all users in a given period using a single query.
@@ -387,8 +378,9 @@ export async function rebuildCombinedRankings(
        ) v ON v.user_id = u.id AND v.indicator_id = l.indicator_id
       WHERE u.opt_out_leaderboard = FALSE
      GROUP BY u.id
+     HAVING COUNT(DISTINCT l.indicator_id) = :requiredIndicators
      ORDER BY combined_score ASC`,
-    { y: year, m: month },
+    { y: year, m: month, requiredIndicators: REQUIRED_COMBINED_INDICATORS },
   );
 
   // Flatten the result to the expected return type
